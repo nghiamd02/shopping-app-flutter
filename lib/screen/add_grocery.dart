@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shopping_app/data/categories_data.dart';
 import 'package:shopping_app/model/category.dart';
 import 'package:shopping_app/model/grocery_item.dart';
@@ -15,16 +18,45 @@ class _NewGroceryState extends State<NewGrocery> {
   final _formKey = GlobalKey<FormState>();
   var _inputName = '';
   var _inputQuantity = 1;
-  var _initCategory = categories[Categories.fruit];
+  var _initCategory = categories[Categories.fruit]!;
+  var _isAdding = false;
 
-  void _onFormSave() {
+  //save the input data from user
+  void _onFormSave() async {
+    //validate the input data
     if (_formKey.currentState!.validate()) {
+      //refer the method onSave() of each type of form
       _formKey.currentState!.save();
+
+      //Change state after saving
+      setState(() {
+        _isAdding = true;
+      });
+
+      //restApi: use post method to send data to the db
+      final url =
+          Uri.https('dummy-prep-default-rtdb.firebaseio.com', 'new-item.json');
+      final response = await http.post(url,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'name': _inputName,
+            'quantity': _inputQuantity,
+            'category': _initCategory.type,
+          }));
+
+      //check if the context does not exist?
+      if (!context.mounted) {
+        return;
+      }
+
+      //send a new item of grocery to the grocery list screen
+      final Map<String, dynamic> resData = json.decode(response.body);
+      final String catId = resData['name'];
       Navigator.of(context).pop(GroceryItem(
-          id: DateTime.now().toString(),
+          id: catId,
           name: _inputName,
           quantity: _inputQuantity,
-          category: _initCategory!));
+          category: _initCategory));
     }
   }
 
@@ -102,7 +134,7 @@ class _NewGroceryState extends State<NewGrocery> {
                         ],
                         onChanged: (value) {
                           setState(() {
-                            _initCategory = value;
+                            _initCategory = value!;
                           });
                         })),
               ],
@@ -114,9 +146,11 @@ class _NewGroceryState extends State<NewGrocery> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                    onPressed: () {
-                      _formKey.currentState!.reset();
-                    },
+                    onPressed: _isAdding
+                        ? null
+                        : () {
+                            _formKey.currentState!.reset();
+                          },
                     child: Text(
                       'Reset',
                       style: TextStyle(
@@ -126,15 +160,21 @@ class _NewGroceryState extends State<NewGrocery> {
                   width: 10,
                 ),
                 ElevatedButton(
-                  onPressed: _onFormSave,
+                  onPressed: _isAdding ? null : _onFormSave,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                   ),
-                  child: Text(
-                    'Add Item',
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary),
-                  ),
+                  child: _isAdding
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(),
+                        )
+                      : Text(
+                          'Add Item',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary),
+                        ),
                 )
               ],
             )
